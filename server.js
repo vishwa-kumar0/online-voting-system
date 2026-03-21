@@ -1,165 +1,269 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
 const PORT = 5000;
+
+// MongoDB Connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/voting-system';
+let db;
+
+const connectDB = async () => {
+    try {
+        const client = new MongoClient(MONGODB_URI);
+        await client.connect();
+        console.log('MongoDB connected successfully');
+        db = client.db('voting-system');
+    } catch (error) {
+        console.error('MongoDB connection failed:', error);
+        process.exit(1);
+    }
+};
+
+connectDB();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// In-memory storage (you can replace with a database later)
-let voters = [];
-let votes = [];
-
 
 // POST /voters - Register a voter
-app.post('/voters', (req, res) => {
-    const { name, email } = req.body;
+app.post('/voters', async (req, res) => {
+    try {
+        const { name, email } = req.body;
 
-    // Validate input
-    if (!name || !email) {
-        return res.status(400).json({ message: 'Name and email are required' });
+        // Validate input
+        if (!name || !email) {
+            return res.status(400).json({ message: 'Name and email are required' });
+        }
+
+        // Check if voter already exists
+        const existing = await db.collection('voters').findOne({ email: email.toLowerCase() });
+        if (existing) {
+            return res.status(400).json({ message: 'Voter with this email already registered' });
+        }
+
+        // Create new voter
+        const newVoter = {
+            name: name.trim(),
+            email: email.toLowerCase().trim(),
+            hasVoted: false,
+            createdAt: new Date()
+        };
+
+        const result = await db.collection('voters').insertOne(newVoter);
+
+        res.status(201).json({
+            message: 'Voter registered successfully',
+            voter: {
+                id: result.insertedId,
+                name: newVoter.name,
+                email: newVoter.email,
+                hasVoted: newVoter.hasVoted
+            }
+        });
+    } catch (error) {
+        console.error('Error registering voter:', error);
+        res.status(500).json({ message: 'Server error during registration' });
     }
-
-    // Check if voter already exists
-    const existingVoter = voters.find(voter => voter.email === email);
-    if (existingVoter) {
-        return res.status(400).json({ message: 'Voter with this email already registered' });
-    }
-
-    // Add new voter
-    const newVoter = { id: voters.length + 1, name, email, hasVoted: false };
-    voters.push(newVoter);
-
-    res.status(201).json({ message: 'Voter registered successfully', voter: newVoter });
 });
 
 // POST /vote - Cast a vote
-app.post('/vote', (req, res) => {
-    const { email, candidate } = req.body;
+app.post('/vote', async (req, res) => {
+    try {
+        const { email, candidate } = req.body;
 
-    // Validate input
-    if (!email || !candidate) {
-        return res.status(400).json({ message: 'Email and candidate are required' });
+        // Validate input
+        if (!email || !candidate) {
+            return res.status(400).json({ message: 'Email and candidate are required' });
+        }
+
+        // Find voter
+        const voter = await db.collection('voters').findOne({ email: email.toLowerCase() });
+        if (!voter) {
+            return res.status(404).json({ message: 'Voter not found. Please register first.' });
+        }
+
+        // Check if voter has already voted
+        if (voter.hasVoted) {
+            return res.status(400).json({ message: 'You have already voted' });
+        }
+
+        // Create and save the vote
+        const newVote = {
+            voterId: voter._id,
+            candidate: candidate.trim(),
+            timestamp: new Date()
+        };
+
+        await db.collection('votes').insertOne(newVote);
+
+        // Mark voter as having voted
+        await db.collection('voters').updateOne(
+            { _id: voter._id },
+            { $set: { hasVoted: true } }
+        );
+
+        res.json({ message: `Vote for ${candidate} recorded successfully!` });
+    } catch (error) {
+        console.error('Error casting vote:', error);
+        res.status(500).json({ message: 'Server error during voting' });
     }
-
-    // Find voter
-    const voter = voters.find(v => v.email === email);
-    if (!voter) {
-        return res.status(404).json({ message: 'Voter not found. Please register first.' });
-    }
-
-    // Check if voter has already voted
-    if (voter.hasVoted) {
-        return res.status(400).json({ message: 'You have already voted' });
-    }
-
-    // Record the vote
-    votes.push({ voterId: voter.id, candidate, timestamp: new Date() });
-
-    // Mark voter as having voted
-    voter.hasVoted = true;
-
-    res.json({ message: `Vote for ${candidate} recorded successfully!` });
 });
 
 // GET /results - Get voting results
-app.get('/results', (req, res) => {
-    // Count votes for each candidate
-    const results = {};
-    votes.forEach(vote => {
-        results[vote.candidate] = (results[vote.candidate] || 0) + 1;
-    });
+app.get('/results', async (req, res) => {
+    try {
+        // Use MongoDB aggregation to count votes by candidate
+        const results = await db.collection('votes').aggregate([
+            {
+                $group: {
+                    _id: '$candidate',
+                    votes: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { votes: -1 } // Sort by vote count descending
+            }
+        ]).toArray();
 
-    // Convert to array format for frontend
-    const resultsArray = Object.entries(results).map(([name, votes]) => ({
-        name,
-        votes
-    }));
+        // Convert to the expected format
+        const resultsArray = results.map(result => ({
+            name: result._id,
+            votes: result.votes
+        }));
 
-    res.json(resultsArray);
+        res.json(resultsArray);
+    } catch (error) {
+        console.error('Error getting results:', error);
+        res.status(500).json({ message: 'Server error retrieving results' });
+    }
 });
 
 // ===== ADMIN CRUD OPERATIONS =====
 
 // GET /admin/voters - Get all voters
-app.get('/admin/voters', (req, res) => {
-    res.json(voters);
+app.get('/admin/voters', async (req, res) => {
+    try {
+        const voters = await db.collection('voters').find().sort({ createdAt: -1 }).toArray();
+        res.json(voters);
+    } catch (error) {
+        console.error('Error getting voters:', error);
+        res.status(500).json({ message: 'Server error retrieving voters' });
+    }
 });
 
 // GET /admin/votes - Get all votes
-app.get('/admin/votes', (req, res) => {
-    res.json(votes);
+app.get('/admin/votes', async (req, res) => {
+    try {
+        const votes = await db.collection('votes').find().sort({ timestamp: -1 }).toArray();
+        res.json(votes);
+    } catch (error) {
+        console.error('Error getting votes:', error);
+        res.status(500).json({ message: 'Server error retrieving votes' });
+    }
 });
 
 // UPDATE /admin/voters/:email - Update voter information
-app.put('/admin/voters/:email', (req, res) => {
-    const email = req.params.email;
-    const { name, newEmail } = req.body;
+app.put('/admin/voters/:email', async (req, res) => {
+    try {
+        const email = req.params.email.toLowerCase();
+        const { name, newEmail } = req.body;
 
-    const voter = voters.find(v => v.email === email);
-    if (!voter) {
-        return res.status(404).json({ message: 'Voter not found' });
-    }
-
-    if (name) voter.name = name;
-    if (newEmail && newEmail !== email) {
-        const existingWithNewEmail = voters.find(v => v.email === newEmail);
-        if (existingWithNewEmail) {
-            return res.status(400).json({ message: 'Email already in use' });
+        const voter = await db.collection('voters').findOne({ email });
+        if (!voter) {
+            return res.status(404).json({ message: 'Voter not found' });
         }
-        voter.email = newEmail;
-    }
 
-    res.json({ message: 'Voter updated successfully', voter });
+        const updateData = {};
+        if (name) updateData.name = name.trim();
+        
+        if (newEmail && newEmail.toLowerCase() !== email) {
+            const existingWithNewEmail = await db.collection('voters').findOne({ email: newEmail.toLowerCase() });
+            if (existingWithNewEmail) {
+                return res.status(400).json({ message: 'Email already in use' });
+            }
+            updateData.email = newEmail.toLowerCase().trim();
+        }
+
+        await db.collection('voters').updateOne(
+            { email },
+            { $set: updateData }
+        );
+
+        const updatedVoter = await db.collection('voters').findOne(newEmail ? { email: newEmail.toLowerCase() } : { email });
+        res.json({ message: 'Voter updated successfully', voter: updatedVoter });
+    } catch (error) {
+        console.error('Error updating voter:', error);
+        res.status(500).json({ message: 'Server error updating voter' });
+    }
 });
 
 // DELETE /admin/voters/:email - Delete a voter
-app.delete('/admin/voters/:email', (req, res) => {
-    const email = req.params.email;
-    const voterIndex = voters.findIndex(v => v.email === email);
+app.delete('/admin/voters/:email', async (req, res) => {
+    try {
+        const email = req.params.email.toLowerCase();
 
-    if (voterIndex === -1) {
-        return res.status(404).json({ message: 'Voter not found' });
+        const voter = await db.collection('voters').findOne({ email });
+        if (!voter) {
+            return res.status(404).json({ message: 'Voter not found' });
+        }
+
+        // Delete the voter
+        await db.collection('voters').deleteOne({ _id: voter._id });
+
+        // Also delete their vote if they voted
+        await db.collection('votes').deleteOne({ voterId: voter._id });
+
+        res.json({ message: 'Voter deleted successfully', voter });
+    } catch (error) {
+        console.error('Error deleting voter:', error);
+        res.status(500).json({ message: 'Server error deleting voter' });
     }
-
-    const deletedVoter = voters.splice(voterIndex, 1)[0];
-
-    // Also delete their vote if they voted
-    const voteIndex = votes.findIndex(v => v.voterId === deletedVoter.id);
-    if (voteIndex !== -1) {
-        votes.splice(voteIndex, 1);
-    }
-
-    res.json({ message: 'Voter deleted successfully', voter: deletedVoter });
 });
 
 // DELETE /admin/votes/:email - Delete votes by voter email
-app.delete('/admin/votes/:email', (req, res) => {
-    const email = req.params.email;
-    const voter = voters.find(v => v.email === email);
+app.delete('/admin/votes/:email', async (req, res) => {
+    try {
+        const email = req.params.email.toLowerCase();
 
-    if (!voter) {
-        return res.status(404).json({ message: 'Voter not found' });
+        const voter = await db.collection('voters').findOne({ email });
+        if (!voter) {
+            return res.status(404).json({ message: 'Voter not found' });
+        }
+
+        const vote = await db.collection('votes').findOne({ voterId: voter._id });
+        if (!vote) {
+            return res.status(404).json({ message: 'No vote found for this voter' });
+        }
+
+        await db.collection('votes').deleteOne({ _id: vote._id });
+        
+        // Reset voter's hasVoted flag
+        await db.collection('voters').updateOne(
+            { _id: voter._id },
+            { $set: { hasVoted: false } }
+        );
+
+        res.json({ message: 'Vote deleted successfully', vote });
+    } catch (error) {
+        console.error('Error deleting vote:', error);
+        res.status(500).json({ message: 'Server error deleting vote' });
     }
-
-    const voteIndex = votes.findIndex(v => v.voterId === voter.id);
-    if (voteIndex === -1) {
-        return res.status(404).json({ message: 'No vote found for this voter' });
-    }
-
-    const deletedVote = votes.splice(voteIndex, 1)[0];
-    voter.hasVoted = false;
-
-    res.json({ message: 'Vote deleted successfully', vote: deletedVote });
 });
 
 // DELETE /admin/reset - Clear all data
-app.delete('/admin/reset', (req, res) => {
-    voters = [];
-    votes = [];
-    res.json({ message: 'All data cleared successfully' });
+app.delete('/admin/reset', async (req, res) => {
+    try {
+        await db.collection('voters').deleteMany({});
+        await db.collection('votes').deleteMany({});
+        res.json({ message: 'All data cleared successfully' });
+    } catch (error) {
+        console.error('Error clearing data:', error);
+        res.status(500).json({ message: 'Server error clearing data' });
+    }
 });
 
 app.listen(PORT, () => {

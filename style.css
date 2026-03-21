@@ -1,0 +1,102 @@
+/* Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Body */
+body {
+    font-family: Arial;
+    background: linear-gradient(135deg, #4facfe, #00f2fe);
+    text-align: center;
+    padding: 20px;
+}
+
+/* Title */
+h1 {
+    color: white;
+    transition: 0.3s;
+}
+
+h1:hover {
+    transform: scale(1.05);
+}
+
+/* Container Card */
+.container {
+    background: white;
+    padding: 20px;
+    margin: 20px auto;
+    width: 300px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px gray;
+    transition: 0.3s;
+}
+
+/* Card Hover */
+.container:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+}
+
+/* Inputs & Select */
+input, select {
+    width: 90%;
+    padding: 8px;
+    margin: 8px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    transition: 0.3s;
+}
+
+/* Input Hover */
+input:hover, select:hover {
+    border-color: #4facfe;
+}
+
+/* Input Focus */
+input:focus, select:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 5px #007bff;
+}
+
+/* Buttons */
+button {
+    width: 90%;
+    padding: 8px;
+    margin: 8px;
+    background: blue;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+/* Button Hover */
+button:hover {
+    background: darkblue;
+    transform: scale(1.05);
+}
+
+/* Button Click */
+button:active {
+    transform: scale(0.95);
+}
+
+/* Result List */
+li {
+    list-style: none;
+    margin: 5px;
+    padding: 8px;
+    background: #f4f4f4;
+    border-radius: 5px;
+    transition: 0.3s;
+}
+
+/* List Hover */
+li:hover {
+    background: #e0f0ff;
+    transform: translateX(5px);
+}

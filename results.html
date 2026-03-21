@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Election Results - Online Voting System</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .results-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 2px solid #e9ecef;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .candidate-result {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin: 10px 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .candidate-result:hover {
+            transform: translateY(-2px);
+        }
+
+        .candidate-info {
+            flex: 1;
+        }
+
+        .candidate-name {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .vote-count {
+            color: #007bff;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .vote-percentage {
+            background: #e9ecef;
+            height: 8px;
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .vote-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #007bff, #0056b3);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        .last-updated {
+            text-align: center;
+            color: #6c757d;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Election Results</h1>
+
+    <div class="container">
+        <div class="results-summary">
+            <h2>Live Election Results</h2>
+            <p>Real-time vote counts and statistics</p>
+        </div>
+
+        <button onclick="getResults()" class="refresh-btn">Refresh Results</button>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="total-voters">0</div>
+                <div class="stat-label">Total Voters</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="total-votes">0</div>
+                <div class="stat-label">Votes Cast</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="turnout-rate">0%</div>
+                <div class="stat-label">Turnout Rate</div>
+            </div>
+        </div>
+
+        <div id="results-loading" class="loading">Loading results...</div>
+
+        <div id="results-container" style="display: none;">
+            <h3>Candidate Results</h3>
+            <div id="candidate-results"></div>
+        </div>
+
+        <div class="nav-links">
+            <a href="index.html">Home</a> |
+            <a href="register.html">Register</a> |
+            <a href="vote.html">Vote</a>
+        </div>
+
+        <div class="last-updated" id="last-updated">
+            Last updated: <span id="update-time">Never</span>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        let totalVoters = 0;
+        let totalVotes = 0;
+
+        // Enhanced results display with visual elements
+        async function getResults() {
+            const refreshBtn = document.querySelector('.refresh-btn');
+            const loadingDiv = document.getElementById('results-loading');
+            const resultsContainer = document.getElementById('results-container');
+
+            // Show loading state
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = '⏳ Loading...';
+            loadingDiv.style.display = 'block';
+            resultsContainer.style.display = 'none';
+
+            try {
+                const res = await fetch(API + '/results');
+                const data = await res.json();
+
+                // Update statistics
+                totalVotes = data.reduce((sum, candidate) => sum + candidate.votes, 0);
+                document.getElementById('total-votes').textContent = totalVotes;
+                document.getElementById('total-voters').textContent = totalVoters;
+                document.getElementById('turnout-rate').textContent =
+                    totalVoters > 0 ? Math.round((totalVotes / totalVoters) * 100) + '%' : '0%';
+
+                // Display candidate results with visual bars
+                const candidateResultsDiv = document.getElementById('candidate-results');
+                candidateResultsDiv.innerHTML = '';
+
+                if (data.length === 0) {
+                    candidateResultsDiv.innerHTML = '<p style="text-align: center; color: #6c757d; padding: 20px;">No votes cast yet.</p>';
+                } else {
+                    // Sort by vote count (highest first)
+                    data.sort((a, b) => b.votes - a.votes);
+
+                    data.forEach((candidate, index) => {
+                        const percentage = totalVotes > 0 ? (candidate.votes / totalVotes * 100).toFixed(1) : 0;
+                        const isWinner = index === 0 && candidate.votes > 0;
+
+                        const resultDiv = document.createElement('div');
+                        resultDiv.className = 'candidate-result';
+                        if (isWinner) resultDiv.style.borderLeft = '4px solid #28a745';
+
+                        resultDiv.innerHTML = `
+                            <div class="candidate-info">
+                                <div class="candidate-name">
+                                    ${isWinner ? '🏆 ' : ''}${candidate.name}
+                                    ${isWinner ? ' (Leading)' : ''}
+                                </div>
+                                <div class="vote-count">${candidate.votes} votes (${percentage}%)</div>
+                                <div class="vote-percentage">
+                                    <div class="vote-bar" style="width: ${percentage}%"></div>
+                                </div>
+                            </div>
+                        `;
+
+                        candidateResultsDiv.appendChild(resultDiv);
+                    });
+                }
+
+                // Update timestamp
+                document.getElementById('update-time').textContent = new Date().toLocaleTimeString();
+
+            } catch (error) {
+                console.error('Error loading results:', error);
+                document.getElementById('candidate-results').innerHTML =
+                    '<p style="text-align: center; color: #dc3545; padding: 20px;">Error loading results. Please try again.</p>';
+            } finally {
+                // Hide loading state
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = '🔄 Refresh Results';
+                loadingDiv.style.display = 'none';
+                resultsContainer.style.display = 'block';
+            }
+        }
+
+        // Auto-load results when page loads
+        window.onload = function() {
+            getResults();
+            // Auto-refresh every 30 seconds
+            setInterval(getResults, 30000);
+        };
+    </script>
+</body>
+</html>
+    </script>
+</body>
+</html>

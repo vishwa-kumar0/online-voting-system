@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cast Your Vote - Online Voting System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Cast Your Vote</h1>
+
+    <div class="container">
+        <h3>Vote for Your Candidate</h3>
+        <p>Use the email you registered with to cast your vote.</p>
+
+        <input type="email" id="voterEmail" placeholder="Enter Your Registered Email">
+
+        <label for="candidate">Select Candidate:</label>
+        <select id="candidate">
+            <option value="">Choose a candidate...</option>
+            <option value="Candidate A">Candidate A</option>
+            <option value="Candidate B">Candidate B</option>
+        </select>
+
+        <button onclick="vote()">Cast Vote</button>
+
+        <div class="nav-links">
+            <a href="index.html">← Back to Home</a> |
+            <a href="register.html">Need to register first?</a> |
+            <a href="results.html">View Results</a>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

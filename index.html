@@ -1,90 +1,24 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Online Voting System</title>
-
-<link rel="stylesheet" href="style.css">
-   
+    <title>Online Voting System - Home</title>
+    <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
+    <h1>Online Voting System</h1>
 
-<h1>Online Voting System</h1>
+    <div class="container">
+        <h2>Welcome to Secure Online Voting</h2>
+        <p>Cast your vote safely and securely from anywhere.</p>
 
-<!-- Register -->
-<div class="container">
-    <h3>Register Voter</h3>
-    <input type="text" id="name" placeholder="Enter Name">
-    <input type="email" id="email" placeholder="Enter Email">
-    <button onclick="registerVoter()">Register</button>
-</div>
+        <div class="nav-buttons">
+            <a href="register.html" class="nav-btn">Register to Vote</a>
+            <a href="vote.html" class="nav-btn">Cast Your Vote</a>
+            <a href="results.html" class="nav-btn">View Results</a>
+            <a href="admin.html" class="nav-btn" style="background: linear-gradient(135deg, #dc3545, #c82333);">Admin Panel</a>
+        </div>
+    </div>
 
-<!-- Vote -->
-<div class="container">
-    <h3>Vote</h3>
-    <input type="text" id="voterEmail" placeholder="Enter Your Email">
-
-    <select id="candidate">
-        <option value="Candidate A">Candidate A</option>
-        <option value="Candidate B">Candidate B</option>
-    </select>
-
-    <button onclick="vote()">Vote</button>
-</div>
-
-<!-- Results -->
-<div class="container">
-    <h3>Results</h3>
-    <button onclick="getResults()">Show Results</button>
-    <ul id="results"></ul>
-</div>
-
-<script>
-const API = "http://localhost:5000";
-
-async function registerVoter() {
-    const name = document.getElementById("name").value;
-    const email = document.getElementById("email").value;
-
-    await fetch(API + "/voters", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ name, email })
-    });
-
-    alert("Registered Successfully!");
-}
-
-async function vote() {
-    const email = document.getElementById("voterEmail").value;
-    const candidate = document.getElementById("candidate").value;
-
-    const res = await fetch(API + "/vote", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ email, candidate })
-    });
-
-    const data = await res.json();
-    alert(data.message);
-}
-
-async function getResults() {
-    const res = await fetch(API + "/results");
-    const data = await res.json();
-
-    const list = document.getElementById("results");
-    list.innerHTML = "";
-
-    data.forEach(c => {
-        const li = document.createElement("li");
-        li.innerHTML = c.name + " - Votes: " + c.votes;
-        list.appendChild(li);
-    });
-}
-
-getResults();
-</script>
-
+    <script src="script.js"></script>
 </body>
 </html>

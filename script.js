@@ -25,11 +25,14 @@ async function registerVoter() {
             // Show success message with option to proceed to voting
             showRegistrationSuccess(name, email);
         } else {
-            alert(data.message || "Registration failed");
+            const errorMsg = data.message || `Registration failed (${res.status})`;
+            alert(errorMsg);
+            console.error('Registration failed:', res.status, data);
         }
 
     } catch (error) {
-        alert("Error registering voter");
+        alert(`Error registering voter: ${error.message}`);
+        console.error('Error registering voter:', error);
     }
 }
 
@@ -51,7 +54,7 @@ function showRegistrationSuccess(name, email) {
     `;
 
     successDiv.innerHTML = `
-        <h3>✅ Registration Successful!</h3>
+        <h3>Registration Successful!</h3>
         <p>Welcome <strong>${name}</strong>! You have been registered with email: <strong>${email}</strong></p>
         <p>You can now cast your vote in the election.</p>
         <button onclick="goToVoting()" style="

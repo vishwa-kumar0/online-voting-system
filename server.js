@@ -7,19 +7,49 @@ const app = express();
 const PORT = 5000;
 
 // MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/voting-system';
+const PRIMARY_MONGODB_URI = process.env.MONGODB_URI || '';
+const DEFAULT_LOCAL_MONGODB_URI = 'mongodb://127.0.0.1:27017/voting-system';
 let db;
 
+const reportUri = uri => uri.startsWith('mongodb+srv') ? 'mongodb+srv://<REDACTED>' : uri;
+
+const connectMongo = async (uri) => {
+    const client = new MongoClient(uri, {
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+        heartbeatFrequencyMS: 10000,
+    });
+    await client.connect();
+    db = client.db('voting-system');
+    console.log(`MongoDB connected using: ${reportUri(uri)}`);
+};
+
 const connectDB = async () => {
+    let attemptedUri = PRIMARY_MONGODB_URI || DEFAULT_LOCAL_MONGODB_URI;
+    console.log('Trying to connect to MongoDB using:', reportUri(attemptedUri));
+
     try {
-        const client = new MongoClient(MONGODB_URI);
-        await client.connect();
-        console.log('MongoDB connected successfully');
-        db = client.db('voting-system');
+        await connectMongo(attemptedUri);
     } catch (error) {
-        console.error('MongoDB connection failed:', error);
-        process.exit(1);
+        console.error(`Failed to connect using ${reportUri(attemptedUri)}:`, error.message || error);
+
+        if (attemptedUri !== DEFAULT_LOCAL_MONGODB_URI) {
+            console.log('Falling back to local MongoDB:', DEFAULT_LOCAL_MONGODB_URI);
+            try {
+                await connectMongo(DEFAULT_LOCAL_MONGODB_URI);
+            } catch (fallbackError) {
+                console.error('Local MongoDB fallback failed:', fallbackError.message || fallbackError);
+                process.exit(1);
+            }
+        } else {
+            process.exit(1);
+        }
     }
+
+    // start server once DB is connected
+    app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+    });
 };
 
 connectDB();
@@ -139,6 +169,41 @@ app.get('/results', async (req, res) => {
     } catch (error) {
         console.error('Error getting results:', error);
         res.status(500).json({ message: 'Server error retrieving results' });
+    }
+});
+
+
+// GET /candidates - Return static candidate list
+app.get('/candidates', async (req, res) => {
+    const staticCandidates = [
+        { name: 'Candidate A', value: 'candidateA' },
+        { name: 'Candidate B', value: 'candidateB' },
+        { name: 'Candidate C', value: 'candidateC' }
+    ];
+
+    if (!db) {
+        return res.json({ candidates: staticCandidates, votes: [] });
+    }
+
+    try {
+        const aggregatedVotes = await db.collection('votes').aggregate([
+            { $group: { _id: '$candidate', votes: { $sum: 1 } } }
+        ]).toArray();
+
+        const voteMap = aggregatedVotes.reduce((acc, item) => {
+            acc[item._id] = item.votes;
+            return acc;
+        }, {});
+
+        const enhanced = staticCandidates.map(candidate => ({
+            ...candidate,
+            votes: voteMap[candidate.value] || 0
+        }));
+
+        res.json({ candidates: enhanced });
+    } catch (error) {
+        console.error('Error getting candidates:', error);
+        res.status(500).json({ message: 'Server error retrieving candidates' });
     }
 });
 
@@ -264,8 +329,4 @@ app.delete('/admin/reset', async (req, res) => {
         console.error('Error clearing data:', error);
         res.status(500).json({ message: 'Server error clearing data' });
     }
-});
-
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
 });
